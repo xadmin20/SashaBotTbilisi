@@ -22,3 +22,5 @@ __pycache__/
 .env
 .venv/
 logs
+client.session
+printer.session

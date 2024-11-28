@@ -1,19 +1,33 @@
-from asgiref.sync import sync_to_async
-from telethon.tl.types import PeerChat, PeerChannel, UpdateShortChatMessage
-from telethon.tl.types import PeerChannel, PeerChat
 
-from telethon import events
-from telethon.tl.types import PeerChannel, PeerChat, UpdateShortChatMessage, Message
-from tgbot.models import Keyword, Specialty
+
+from telethon.tl.types import PeerChannel, PeerChat, Message
+from tgbot.models import Keyword
 from logger_setup import logger
 
-
 from asgiref.sync import sync_to_async
+import pymorphy2
+
+
+# Инициализация анализатора
+morph = pymorphy2.MorphAnalyzer()
+
+def generate_word_forms(word: str) -> set:
+    """
+    Генерация различных форм слова.
+    :param word: Исходное слово.
+    :return: Набор словоформ.
+    """
+    try:
+        parsed_word = morph.parse(word)[0]
+        word_forms = {form.word for form in parsed_word.lexeme}  # Все формы слова
+        return word_forms
+    except Exception as e:
+        logger.exception(f"Ошибка генерации словоформ для слова {word}: {e}")
+        return {word}  # Если ошибка, возвращаем само слово
 
 async def process_message(message_text: str) -> list:
     """
     Обработка текста сообщения и возврат списка телеграм-айди пользователей, которые подходят.
-
     """
     try:
         message_text_lower = message_text.lower()
@@ -25,7 +39,13 @@ async def process_message(message_text: str) -> list:
         logger.info(f"Keywords: {keywords}")
 
         for keyword in keywords:
-            if keyword.word.lower() in message_text_lower:
+            # Генерация всех словоформ для ключевого слова
+            logger.debug(f"Обрабатываем слово: {keyword.word}")
+            word_forms = generate_word_forms(keyword.word.lower())
+            logger.info(f"Словоформы для '{keyword.word}': {word_forms}")
+
+            # Проверка, содержится ли хотя бы одна форма слова в тексте сообщения
+            if any(form in message_text_lower for form in word_forms):
                 # Асинхронно получаем пользователей по специальности
                 users_with_specialty = await sync_to_async(list)(keyword.specialty.users.all())
                 matched_users.update(users_with_specialty)
@@ -48,8 +68,6 @@ async def forward_message(client, event) -> dict or None:
             logger.exception(f"Тип атрибута 'message' некорректен: {type(event.message)}")
             return
 
-        print(f"{event=}")
-        # Получаем текст сообщения
         original_message = event.message.message  # Текст сообщения
         logger.info(f"{original_message=}")
 

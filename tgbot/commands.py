@@ -7,17 +7,26 @@ from tgbot.dispatcher import client
 from tgbot.services import forward_message, process_message
 
 
+def start_command_in_private(event):
+    return event.is_private and event.raw_text.strip() == '/start'
+
+@client.on(events.NewMessage(func=start_command_in_private))
+async def handler(event):
+    await event.reply('Привет! Команда /start доступна только в личных сообщениях.')
+
+
 @client.on(events.NewMessage)
 async def handler(event):
     try:
+        if isinstance(event, UpdateUserStatus) or isinstance(event, UpdateReadHistoryInbox) or isinstance(event, UpdateShortChatMessage):
+            return
+
         if isinstance(event, events.NewMessage.Event):
             response = await forward_message(client, event)
-            logger.info(f"Сообщение: {response['message']}")
+            logger.info(f"Сообщение: {response=}")
             users = await process_message(response['message'])
-            logger.info(f"Сообщение: {response['message']}")
-            logger.info(f"Чат: {response['chat_name']}")
-            logger.info(f"Ссылка: {response['message_link']}")
-            logger.info(f"Пользователи: {users}")
+            logger.info(f"Пользователи: {users=}")
+
             msg = f"""
 Сообщение: {response['message']}
 Чат: {response['chat_name']}
@@ -25,10 +34,8 @@ async def handler(event):
 """
             for user in users:
                 await client.send_message(user, msg)
+            return
 
-            return
-        if isinstance(event, UpdateUserStatus) or isinstance(event, UpdateReadHistoryInbox) or isinstance(event, UpdateShortChatMessage):
-            return
         logger.info(f"Получено новое событие: {event}")
         logger.info(f"Type: {type(event)}")
 
